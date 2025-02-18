@@ -3,12 +3,12 @@ require("dotenv").config();
 var express = require("express");
 var cors = require("cors");
 const mongoose = require("mongoose");
-const Joke = require("./models");
+const { Joke, UserVote } = require("./models");
 const bodyParser = require("body-parser");
+const bcrypt = require("bcrypt");
+var jwt = require("jsonwebtoken");
 
-const availableVotes = ["😂", "👍", "❤️"];
-
-const { MONGO_URL } = process.env;
+const { MONGO_URL, KEY_JWT, SALT } = process.env;
 
 async function main() {
   try {
@@ -33,7 +33,7 @@ var app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-app.get("/api/joke", async (req, res) => {
+app.get("/joke", async (req, res) => {
   try {
     const r = await fetch(process.env.JOKE_API_URL).then((r) => r.json());
     const indb = await Joke.findOne({ question: r.question });
@@ -51,7 +51,7 @@ app.get("/api/joke", async (req, res) => {
   }
 });
 
-app.post("/api/joke/:id", async (req, res) => {
+app.post("/joke/:id", async (req, res) => {
   try {
     const id = req.params.id;
     const el = await Joke.findByIdAndUpdate(
@@ -66,7 +66,7 @@ app.post("/api/joke/:id", async (req, res) => {
   }
 });
 
-app.put("/api/joke/:id", async (req, res) => {
+app.put("/joke/:id", async (req, res) => {
   const id = req.params.id;
   try {
     const el = await Joke.findByIdAndUpdate(id, req.body, { new: true });
@@ -77,7 +77,7 @@ app.put("/api/joke/:id", async (req, res) => {
   }
 });
 
-app.delete("/api/joke/:id", async (req, res) => {
+app.delete("/joke/:id", async (req, res) => {
   try {
     const id = req.params.id;
     await Joke.findByIdAndDelete(id);
@@ -86,6 +86,76 @@ app.delete("/api/joke/:id", async (req, res) => {
     console.error(error.message + "post");
     res.json({ message: error.message });
   }
+});
+
+app.post("/signup", async (req, res) => {
+  const { name, pass, email } = req.body;
+  //lookup in base
+  try {
+    const inBD = await UserVote.findOne({ email });
+    if (inBD)
+      res
+        .status(500)
+        .json({ message: "User with this email already exist, login!" });
+  } catch (error) {
+    console.error(error.message);
+    res.json({ message: error.message });
+  }
+  //create user
+  bcrypt.hash(pass, 10, async function (err, hash) {
+    if (hash) {
+      const token = jwt.sign(
+        {
+          data: email,
+        },
+        KEY_JWT,
+        { expiresIn: "1h" }
+      );
+      const newUser = await UserVote.create({
+        name,
+        email,
+        pass: hash,
+        token,
+      });
+      if (newUser) return res.json(newUser);
+      else
+        res.status(500).json({ message: "error with saving user, try again" });
+    } else res.json({ message: err.message });
+  });
+});
+
+app.post("/login", async (req, res) => {
+  const { email, pass } = req.body;
+  const user = await UserVote.findOne({ email });
+  if (!user) res.status(400).json({ message: "User not found, register, plz" });
+  else {
+    const passOK = bcrypt.compareSync(pass, user.pass);
+    if (passOK) {
+      const token = jwt.sign(
+        {
+          data: email,
+        },
+        KEY_JWT,
+        { expiresIn: "1h" }
+      );
+      const updatedUser = await UserVote.findByIdAndUpdate(
+        user._id,
+        { token },
+        { new: true }
+      );
+      if (updatedUser) res.json(updatedUser);
+      else res.status(500).json({ message: "error token refresh" });
+    }
+  }
+});
+
+app.get("/results", async (req, res) => {
+  const data = await Joke.find({
+    votes: { $elemMatch: { value: { $gt: 0 } } },
+  });
+  console.log(data)
+  if (data) res.json(data);
+  else res.status(500).json({ message: data.message });
 });
 
 const port = process.env.PORT || 5000;
