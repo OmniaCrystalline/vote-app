@@ -24,6 +24,17 @@ const JokeSchema = new mongoose.Schema({
   availableVotes: { type: [String], default: reactions },
 });
 
-const Joke = mongoose.model("Joke", JokeSchema);
+const UserVoteSchema = new mongoose.Schema({
+  name: String,
+  pass: String,
+  token: String,
+  email: {
+    type: String,
+    unique: true,
+  },
+});
 
-module.exports = Joke;
+const Joke = mongoose.model("Joke", JokeSchema);
+const UserVote = mongoose.model("UserVote", UserVoteSchema);
+
+module.exports = {Joke, UserVote};

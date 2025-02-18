@@ -1,7 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import './App.css'
 import Update from './Update'
 import Loader from './Loader'
+import Modal from './Modal'
+import { SessionContext } from './SessionContext'
+import ResultsModal from './ResultsModal'
+import { Res } from './ResultsModal'
+
 
 interface IVote {
   label: String,
@@ -18,16 +23,40 @@ interface IJoke {
 
 
 function App() {
+  const { user, setuser } = useContext(SessionContext)
   const [joke, setjoke] = useState<IJoke | null>(null)
   const [err, seterr] = useState(null)
   const [loading, setloading] = useState(false)
   const [voted, setvoted] = useState<string[]>([])
   const [update, setupdate] = useState<boolean>(false)
+  const [modal, setmodal] = useState(false)
+  const [result, setresult] = useState<Res[]>([])
 
+  //  const local = 'http://localhost:5000'
+
+  const URL = 'https://vote-app-gq2h.onrender.com'
+
+  const results = () => {
+    fetch(`${URL}/results`)
+      .then(r => r.json())
+      .then(r => setresult(r))
+  }
+  //logout user
+  const logout = () => {
+    setuser({
+      name: '',
+      pass: '',
+      token: '',
+      email: ''
+    })
+    localStorage.removeItem("user");
+  }
+
+  //delete joke from db
   const deleteJoke = () => {
     if (joke) {
       setloading(true)
-      fetch(`http://localhost:5000/api/joke/${joke._id}`, {
+      fetch(`${URL}/joke/${joke._id}`, {
         method: 'DELETE'
       }).then(() => newJoke())
         .catch(e => seterr(e.message))
@@ -35,6 +64,7 @@ function App() {
     }
   }
 
+  //add reaction to db
   const handleReaction = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLButtonElement;
     //did not voted yet with this reaction
@@ -53,7 +83,7 @@ function App() {
       //add reaction to array with voted reactions
       setvoted(voted.includes(target.value) ? voted.filter(e => e !== target.value) : [...voted, target.value])
       setloading(true)
-      fetch(`http://localhost:5000/api/joke/${joke._id}`, {
+      fetch(`${URL}/joke/${joke._id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -78,7 +108,7 @@ function App() {
       })
       //remove reaction from db
       setloading(true)
-      fetch(`http://localhost:5000/api/joke/${joke._id}`, {
+      fetch(`${URL}/joke/${joke._id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -92,11 +122,10 @@ function App() {
     }
   }
 
-
   //new joke on click
   const newJoke = () => {
     setloading(true)
-    fetch('http://localhost:5000/api/joke')
+    fetch(`${URL}/joke`)
       .then(res => res.json())
       .then(res => setjoke(res))
       .catch(err => seterr(err.message))
@@ -108,8 +137,21 @@ function App() {
     newJoke()
   }, [])
 
+
   return (
-    <div className='max-w-2xl ml-auto mr-auto bg-amber-100 grid place-items-center min-h-screen'>
+    <div className='ml-auto mr-auto bg-amber-100 grid place-items-center min-h-screen pb-36'>
+      <div className='flex w-screen justify-between'>
+        {user.name !== '' ? <span className='ml-5'>Hello, {user && user.name && <span className='text-indigo-400'>{user.name}</span>}!</span> : <span></span>}
+        {user.name !== '' && <button
+          onClick={results}
+          className='text-amber-700 rounded-2xl underline'>results
+        </button>}
+        <button
+          onClick={user.name !== '' ? () => logout() : () => setmodal(!modal)}
+          className='bg-indigo-400 px-5 text-amber-50 rounded-2xl mr-5'>{user.name === '' ? 'login' : 'logout'}
+        </button>
+
+      </div>
       <div className='min-h-36 min-w-72'>
         <h1 className='text-center text-xl'>Joke of the day:</h1>
         {loading ? <Loader /> : <p className='h-7'></p>}
@@ -128,6 +170,8 @@ function App() {
         </div>
         {joke && update && <Update setjoke={setjoke} id={joke._id} />}
         {err ? <p className='h-12'>{err}</p> : <p className='h-12'></p>}
+        {modal && <Modal modal={modal} setmodal={setmodal} />}
+        {result.length > 0 && <ResultsModal setresult={setresult} results={result} />}
       </div>
     </div>
   )
