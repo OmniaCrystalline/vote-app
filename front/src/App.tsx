@@ -1,30 +1,17 @@
 import { useContext, useEffect, useState } from 'react'
-import './App.css'
 import Update from './Update'
 import Loader from './Loader'
 import Modal from './Modal'
-import { SessionContext } from './SessionContext'
 import ResultsModal from './ResultsModal'
 import { Res } from './ResultsModal'
-
-
-interface IVote {
-  label: String,
-  value: number
-}
-
-interface IJoke {
-  _id: string,
-  question: string,
-  answer: string,
-  votes: IVote[]
-  availableVotes: [String]
-}
+import { newJoke, deleteJoke, getResult, setVotes } from './helpers/func'
+import { IJoke } from './helpers/interfaces'
+import { SessionContext } from './helpers/variables'
 
 
 function App() {
   const { user, setuser } = useContext(SessionContext)
-  const [joke, setjoke] = useState<IJoke | null>(null)
+  const [joke, setjoke] = useState<IJoke | null>()
   const [err, seterr] = useState(null)
   const [loading, setloading] = useState(false)
   const [voted, setvoted] = useState<string[]>([])
@@ -32,14 +19,12 @@ function App() {
   const [modal, setmodal] = useState(false)
   const [result, setresult] = useState<Res[]>([])
 
-  //  const local = 'http://localhost:5000'
-
-  const URL = 'https://vote-app-gq2h.onrender.com'
-
-  const results = () => {
-    fetch(`${URL}/results`)
-      .then(r => r.json())
-      .then(r => setresult(r))
+  const handleResults = async () => {
+    setloading(true)
+    const data = await getResult()
+    setresult(data)
+    if (data.message) seterr(data.message)
+    setloading(false)
   }
   //logout user
   const logout = () => {
@@ -51,21 +36,19 @@ function App() {
     })
     localStorage.removeItem("user");
   }
-
-  //delete joke from db
-  const deleteJoke = () => {
+  //delete joke from db on click
+  const handleDeleteJoke = async (e: React.MouseEvent<HTMLButtonElement>) => {
     if (joke) {
+      const target = e.target as HTMLButtonElement;
       setloading(true)
-      fetch(`${URL}/joke/${joke._id}`, {
-        method: 'DELETE'
-      }).then(() => newJoke())
-        .catch(e => seterr(e.message))
-        .finally(() => setloading(false))
+      const r = await deleteJoke(target.value)
+      await getJoke()
+      alert(r.message)
+      setloading(false)
     }
   }
-
   //add reaction to db
-  const handleReaction = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleReaction = async (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLButtonElement;
     //did not voted yet with this reaction
     if (joke && !voted.includes(target.value)) {
@@ -83,19 +66,13 @@ function App() {
       //add reaction to array with voted reactions
       setvoted(voted.includes(target.value) ? voted.filter(e => e !== target.value) : [...voted, target.value])
       setloading(true)
-      fetch(`${URL}/joke/${joke._id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(joke?.votes)
-      }).catch(e => seterr(e.message))
-        .finally(() => setloading(false))
+      const data = await setVotes(joke._id, joke.votes)
+      if (data.message) seterr(data.message)
+      setloading(false)
     }
 
     //alredy voted with this reaction 
     else if (joke && voted.includes(target.value)) {
-
       //update reactions (remove prev reaction on front)
       setjoke((prevJoke) => {
         if (!prevJoke) return prevJoke;
@@ -123,27 +100,30 @@ function App() {
   }
 
   //new joke on click
-  const newJoke = () => {
+  const getJoke = async () => {
     setloading(true)
-    fetch(`${URL}/joke`)
-      .then(res => res.json())
-      .then(res => setjoke(res))
-      .catch(err => seterr(err.message))
-      .finally(() => setloading(false))
+    const data = await newJoke()
+    if (data) setjoke(data)
+    if (!data) seterr(data.message)
+    setloading(false)
+    //reset voted reactions for new joke
+    setvoted([])
   }
 
   //new joke on mount
   useEffect(() => {
-    newJoke()
+    getJoke()
   }, [])
 
 
+
   return (
+
     <div className='ml-auto mr-auto bg-amber-100 grid place-items-center min-h-screen pb-36'>
       <div className='flex w-screen justify-between'>
         {user.name !== '' ? <span className='ml-5'>Hello, {user && user.name && <span className='text-indigo-400'>{user.name}</span>}!</span> : <span></span>}
         {user.name !== '' && <button
-          onClick={results}
+          onClick={handleResults}
           className='text-amber-700 rounded-2xl underline'>results
         </button>}
         <button
@@ -157,15 +137,26 @@ function App() {
         {loading ? <Loader /> : <p className='h-7'></p>}
         {joke && <>
           <div className='min-h-36 w-72 grid gap-5 place-content-center py-5 px-7 bg-amber-600 rounded-4xl text-white'>
-            <p>- {joke.question}</p>
-            <p>- {joke.answer}</p>
+            <p><span className="p-2 ">😺</span>: {joke.question}</p>
+            <p><span className="p-2 ">😸</span>: {joke.answer}</p>
           </div>
-          <div className='flex gap-5 mt-5 justify-evenly' onClick={handleReaction}>
-            {joke.availableVotes.map((e, index) => <button key={e as string} value={e as string} type='button'>{e}({joke.votes[index].value})</button>)}
+          <div className='flex gap-5 mt-5 justify-evenly'
+            onClick={handleReaction}>
+            {joke.availableVotes.map((e, index) => <button
+              key={e as string}
+              value={e as string}
+              type='button'>{e}
+              {joke.votes[index].value}
+            </button>)}
           </div></>}
         <div className='flex mt-5 mb-5 gap-5 justify-between'>
-          <button className='border px-2 border-blue-800 w-24' onClick={newJoke} type='button'>new joke</button>
-          <button className='border px-2 border-red-800' onClick={deleteJoke} type='button'>❌</button>
+          <button className='border px-2 border-blue-800 w-24' onClick={getJoke} type='button'>new joke</button>
+          <button
+            className='border px-2 border-red-800'
+            onClick={handleDeleteJoke}
+            value={joke?._id}
+            type='button'>❌
+          </button>
           <button className='border px-2 border-green-800 w-24' onClick={() => setupdate(!update)} type='button'>{!update ? 'update' : 'close'}</button>
         </div>
         {joke && update && <Update setjoke={setjoke} id={joke._id} />}
@@ -174,6 +165,7 @@ function App() {
         {result.length > 0 && <ResultsModal setresult={setresult} results={result} />}
       </div>
     </div>
+
   )
 }
 
