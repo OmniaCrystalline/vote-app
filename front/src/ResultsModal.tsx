@@ -9,8 +9,10 @@ interface ResultsModalProps {
 }
 
 const ResultsModal: React.FC<ResultsModalProps> = (props) => {
+    console.log('modal res')
     return (
-        <div onClick={() => props.setresult([])} className="bg-rose-100 absolute top-0 left-0 right-0 bottom-0 min-h-screen p-5 grid gap-3">
+        <div onClick={() => props.setresult([])} className="bg-rose-100 absolute top-0 left-0 right-0 bottom-0 min-h-screen p-5 grid gap-3 overflow-scroll">
+
             {props.results.map(e =>
                 <div key={e._id}>
                     <span>-{e.question}</span>

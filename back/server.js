@@ -83,7 +83,7 @@ app.delete("/joke/:id", async (req, res) => {
     await Joke.findByIdAndDelete(id);
     return res.json({ message: "Joke deleted" });
   } catch (error) {
-    console.error(error.message + "post");
+    console.error(error.message);
     res.json({ message: error.message });
   }
 });

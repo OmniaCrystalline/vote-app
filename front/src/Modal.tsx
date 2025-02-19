@@ -1,11 +1,7 @@
 import { useContext, useRef, useState } from "react";
-import { SessionContext } from "./SessionContext";
-const URL = 'https://vote-app-gq2h.onrender.com'
-
-interface ModalProps {
-    setmodal: (modalState: boolean) => void;
-    modal: boolean;
-}
+import { SessionContext } from "./helpers/variables"
+import { login, signup } from "./helpers/func";
+import { ModalProps } from "./helpers/interfaces";
 
 const Modal = (props: ModalProps) => {
     const { setuser, user } = useContext(SessionContext);
@@ -17,64 +13,56 @@ const Modal = (props: ModalProps) => {
     const passL = useRef<HTMLInputElement>(null)
     const emailL = useRef<HTMLInputElement>(null)
 
-    const handleRegister = (event: React.FormEvent) => {
+    const handleRegister = async (event: React.FormEvent) => {
         event.preventDefault();
-        const n = nameR.current?.value;
-        const p = passR.current?.value;
-        const e = emailR.current?.value;
+        const name = nameR.current?.value;
+        const pass = passR.current?.value;
+        const email = emailR.current?.value;
 
-
-        if (n && p && e) {
+        if (name && pass && email) {
             setloading(true)
-            fetch(`${URL}/signup`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-
-                body: JSON.stringify({ name: n, pass: p, email: e })
-            }).then(r => r.json()).then(r => {
-                if (setuser) {
-                    setuser({
-                        ...user,
-                        name: r.name,
-                        token: r.token,
-                        pass: r.pass,
-                        email: r.email
-                    });
-                    localStorage.setItem('user', r.name)
-                    props.setmodal(!props.modal)
-                }
-            }).catch(e => seterror(e.message)).finally(() => setloading(false))
+            const r = await signup({ name, pass, email })
+            if (r._id) {
+                setuser({
+                    ...user,
+                    name: r.name,
+                    token: r.token,
+                    pass: r.pass,
+                    email: r.email
+                });
+                localStorage.setItem('user', r.name)
+                setloading(false)
+                props.setmodal(!props.modal)
+            }
+            else if (r.message) {
+                setloading(false)
+                seterror(r.message)
+            }
         }
     }
 
-    const handleLogin = (event: React.FormEvent) => {
+    const handleLogin = async (event: React.FormEvent) => {
         event.preventDefault();
-        const p = passL.current?.value;
-        const e = emailL.current?.value;
-        if (e && p) {
+        const pass = passL.current?.value;
+        const email = emailL.current?.value;
+        if (email && pass) {
             setloading(true)
-            fetch(`${URL}/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ pass: p, email: e })
-            }).then(r => r.json()).then(r => {
-                if (setuser && r.name) {
-                    setuser({
-                        ...user,
-                        name: r.name,
-                        token: r.token,
-                        pass: r.pass,
-                        email: r.email
-                    });
-                    localStorage.setItem('user', r.name)
-                    props.setmodal(!props.modal)
-                } else seterror(r.message)
-            }).catch(e => seterror(e.message))
-                .finally(() => setloading(false))
+            const r = await login({ email, pass })
+            if (r._id) {
+                setuser({
+                    name: r.name,
+                    token: r.token,
+                    pass: r.pass,
+                    email: r.email
+                })
+                localStorage.setItem('user', r.name)
+                setloading(false)
+                props.setmodal(!props.modal)
+            }
+            if (r?.message) {
+                seterror(r.message)
+                setloading(false)
+            }
         }
     }
 
